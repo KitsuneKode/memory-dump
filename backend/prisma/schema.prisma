@@ -28,10 +28,10 @@ model Content {
   type   ContentType
   title  String
   link   String
-  tags   Tags[]
+  Tags   Tags[]
   userId Int
   user   User        @relation(fields: [userId], references: [id])
-  Link   Link[]
+  // Link   Link[]
 }
 
 model Tags {
@@ -42,11 +42,12 @@ model Tags {
 }
 
 model Link {
-  id      Int       @id @unique @default(autoincrement())
-  hash    String
-  userId  Int
-  user    User      @relation(fields: [userId], references: [id])
-  Content Content[]
+  id     Int    @id @unique @default(autoincrement())
+  hash   String
+  userId Int    @unique
+  user   User   @relation(fields: [userId], references: [id])
+  // contentId Int     @unique
+  // Content   Content @relation(fields: [contentId], references: [id])
 }
 
 enum ContentType {
@@ -54,4 +55,8 @@ enum ContentType {
   video
   article
   audio
+  twitter
+  reddit
+  youtube
+  other
 }

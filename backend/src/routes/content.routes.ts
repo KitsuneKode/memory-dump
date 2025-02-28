@@ -2,70 +2,139 @@ import { PrismaClient, ContentType } from '@prisma/client';
 import { Router, Response, Request } from 'express';
 import { auth } from '../middleware/auth.middleware';
 
-const { content } = new PrismaClient();
-
+const prisma = new PrismaClient();
 const router = Router();
+
 router.get('/content', auth, async (req: Request, res: Response) => {
   const userId = req.userId;
 
-  //TODO prisma fetch
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized - No userId found' });
+    return;
+  }
 
-  const contents = await content.findMany();
+  try {
+    const contents = await prisma.user.findMany({
+      where: {
+        id: Number(userId),
+      },
+      select: {
+        username: true,
+        password: false,
+        id: true,
+        Content: {
+          include: {
+            Tags: true,
+          },
+        },
+      },
+    });
 
-  // const contents = [{ id: 1, type: 'document', link: 'link' }];
+    if (!contents || contents.length === 0) {
+      res.status(404).json({ error: 'No contents found' });
+      return;
+    }
 
-  res.json({ message: 'Contents fetched successfully', contents });
+    res.json({ message: 'Contents fetched successfully', contents });
+  } catch (err) {
+    console.error('Error during getting contents:', err);
+    res
+      .status(500)
+      .json({ error: 'Internal Server Error during adding contents' });
+  }
 });
 
 router.post('/content', auth, async (req: Request, res: Response) => {
   const userId = req.userId;
   const { type, link, title, tags } = req.body;
+
   if (!userId) {
-    throw Error('No userId found');
+    res.status(401).json({ error: 'Unauthorized - No userId found' });
+    return;
   }
 
-  //TODO
-  // const contentId = 1; ///id
+  // Validate required fields
+  if (!type || !link || !title) {
+    res
+      .status(400)
+      .json({ error: 'Missing required fields: type, link, or title' });
+    return;
+  }
 
-  await content.create({
-    data: {
-      type: type,
-      link,
-      title,
-      userId: Number(userId),
-      tags: {
-        connectOrCreate: tags.map((tag: string) => ({
-          where: { tags: tag },
-          create: { tags: tag },
-        })),
-      },
-    },
-  });
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.content.create({
+        data: {
+          type,
+          link,
+          title,
+          userId: Number(userId),
+          Tags: {
+            connectOrCreate:
+              tags?.map((tag: string) => ({
+                where: { tags: tag },
+                create: { tags: tag },
+              })) || [],
+          },
+        },
+      });
 
-  res.json({
-    message: 'Content added successfully',
-  });
+      res.status(201).json({
+        message: 'Content added successfully',
+      });
+    });
+  } catch (err) {
+    console.error('Error during adding content:', err);
+    res
+      .status(500)
+      .json({ error: 'Internal Server Error while creating content' });
+  }
 });
 
 router.delete('/content/:id', auth, async (req: Request, res: Response) => {
   const userId = req.userId;
   const id = req.params['id'];
 
-  console.log(id, userId);
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized - No userId found' });
+    return;
+  }
 
-  //TODO
+  try {
+    await prisma.$transaction(async (tx) => {
+      // First check if the content exists and belongs to the user
+      const existingContent = await tx.content.findFirst({
+        where: {
+          id: Number(id),
+          userId: Number(userId),
+        },
+      });
 
-  // res.status(403).json({
-  //   meesage: "Trying to delete content you don't own",
-  // });
+      if (!existingContent) {
+        res.status(404).json({
+          error: 'Content not found or you do not have permission to delete it',
+        });
+        return;
+      }
 
-  // res.status(404).json({
-  //   meesage: 'Content not Available',
-  // });
+      await tx.content.delete({
+        where: {
+          id: Number(id),
+          userId: Number(userId),
+        },
+      });
 
-  res.json({
-    message: 'Content successfully deleted',
-  });
+      res.json({
+        message: 'Content successfully deleted',
+        deletedContentId: id,
+      });
+    });
+  } catch (err) {
+    console.error('Error during deleting content:', err);
+    res
+      .status(500)
+      .json({ error: 'Internal Server Error error while deleting content' });
+  }
 });
 
 export default router;

@@ -5,7 +5,7 @@ import { JWT_SECRET } from '../config';
 export const auth = (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
   if (!authHeader) {
-    res.status(401).send('Authorization header missing');
+    res.status(401).json({ error: 'Authorization header missing' });
     return;
   }
 
@@ -16,7 +16,7 @@ export const auth = (req: Request, res: Response, next: NextFunction) => {
     next();
   } catch (err) {
     res.status(403).json({
-      message: 'Invalid token',
+      error: 'Invalid token',
     });
     return;
   }
